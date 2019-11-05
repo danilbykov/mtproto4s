@@ -1,2 +1,10 @@
+.bloop
+.metals
+project/target
+target
+
+*.swn
+*.swo
+*.swp
 *.class
 *.log
