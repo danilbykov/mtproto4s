@@ -203,7 +203,10 @@ object MTDecoders {
     }
 
   implicit def vectorDecoder[X : MTDecoder]: MTDecoder[List[X]] =
-    MTDecoder[Int].flatMap(n => MTDecoder[X].repeat(n))
+    MTDecoder[Int].filter(
+      _ == 0x1cb5c415,
+      currentHash => Failure(NonEmptyList.one(ParserError(s"Unexpected hash $currentHash for list")))
+    ) *> MTDecoder[Int].flatMap(n => MTDecoder[X].repeat(n))
 
   implicit val hnilDecoder: MTDecoder[HNil] =
     (_: Vector[Byte]) => Success(HNil, 0)

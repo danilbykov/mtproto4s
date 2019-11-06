@@ -70,10 +70,11 @@ object MTEncoders {
 
   implicit def vectorEncoder[X : MTEncoder]: MTEncoder[List[X]] =
     (xs: List[X]) => {
+      val hash = MTEncoder[Int].encode(0x1cb5c415)
       val init = MTEncoder[Int].encode(xs.size)
       xs.iterator
         .map(MTEncoder[X].encode)
-        .foldLeft[Chain[Byte]](init)(Chain.concat)
+        .foldLeft[Chain[Byte]](Chain.concat(hash, init))(Chain.concat)
     }
 
   implicit val byteChainEncoder: MTEncoder[Chain[Byte]] =
