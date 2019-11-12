@@ -1,4 +1,4 @@
-package io.mtproto4s.mtproto4s.math
+package io.mtproto4s.math
 
 import scala.util.Random
 

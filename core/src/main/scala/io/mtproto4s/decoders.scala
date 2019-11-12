@@ -1,11 +1,15 @@
 package io.mtproto4s
 
 import cats.data.NonEmptyList
+import cats.data.NonEmptyChain
 import shapeless.{::, HList, HNil}
 import shapeless.LabelledGeneric
 import shapeless.Lazy
 import shapeless.Witness
 import shapeless.labelled.{FieldType, field}
+import shapeless.tag
+
+import io.mtproto4s.tags._
 
 case class ParserError(str: String)
 
@@ -99,7 +103,13 @@ object MTDecoder {
 }
 
 object MTDecoders {
-  /*
+
+  implicit class ByteChainOps(val bytes: Vector[Byte]) extends AnyVal {
+
+    def as[A: MTDecoder]: DecodedResult[A] =
+      MTDecoder[A].decode(bytes)
+  }
+
   implicit val bigEndianIntDecoder: MTDecoder[BigEndianInt] =
     (bytes: Vector[Byte]) => {
       if (bytes.size < 4) {
@@ -113,7 +123,6 @@ object MTDecoders {
         Success(tag[BigEndianTag][Int](result), 4)
       }
     }
-  */
 
   implicit val littleEndianIntDecoder: MTDecoder[Int] =
     (bytes: Vector[Byte]) => {
@@ -129,7 +138,6 @@ object MTDecoders {
       }
     }
 
-  /*
   implicit val bigEndianLongDecoder: MTDecoder[BigEndianLong] =
     (bytes: Vector[Byte]) => {
       if (bytes.size < 8) {
@@ -147,7 +155,6 @@ object MTDecoders {
         Success(tag[BigEndianTag][Long](result), 8)
       }
     }
-  */
 
   implicit val littleEndianLongDecoder: MTDecoder[Long] =
     (bytes: Vector[Byte]) => {
@@ -170,7 +177,7 @@ object MTDecoders {
   def padToFour(i: Int) =
     if (i % 4 == 0) i else (i >> 2 << 2) + 4
 
-  implicit val stringDecoder: MTDecoder[String] =
+  implicit val stringDecoder: MTDecoder[MtString] =
     (bytes: Vector[Byte]) => {
       if (bytes.isEmpty) {
         Failure(ParserError("Can not parse string from empty stream"))
@@ -185,7 +192,7 @@ object MTDecoders {
             if (bytes.size < fullSize) {
               Failure(ParserError(s"Not enough bytes to extract $size character string. Only ${bytes.size} available."))
             } else {
-              Success(new String(bytes.take(size + 4).drop(4).toArray, "UTF-8"), fullSize)
+              Success(MtString(bytes.take(size + 4).drop(4).toArray), fullSize)
             }
           }
         } else if (firstByte <= 253) {
@@ -194,7 +201,7 @@ object MTDecoders {
           if (bytes.size < fullSize) {
             Failure(ParserError(s"Not enough bytes to parse $size character string"))
           } else {
-            Success(new String(bytes.take(size + 1).drop(1).toArray, "UTF-8"), fullSize)
+            Success(MtString(bytes.take(size + 1).drop(1).toArray), fullSize)
           }
         } else {
           Failure(ParserError(s"Unexpected first string byte $firstByte"))

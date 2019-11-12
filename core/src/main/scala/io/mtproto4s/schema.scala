@@ -1,24 +1,20 @@
 package io.mtproto4s
 
 import cats.data.Chain
+import shapeless.tag.@@
 
 trait Bare extends Any
 trait Boxed extends Any
 
-/*
 object tags {
-  sealed trait LittleEndianTag extends Hashable
-  sealed trait BigEndianTag extends Hashable
+  sealed trait BigEndianTag// extends Hashable
 
-  type LittleEndianInt = Int @@ LittleEndianTag
   type BigEndianInt = Int @@ BigEndianTag
-
-  type LittleEndianLong = Long @@ LittleEndianTag
   type BigEndianLong = Long @@ BigEndianTag
 }
 
-import tags._
-*/
+final case class MtString(bytes: Array[Byte]) {
+}
 
 final case class Int128(left: Long, right: Long) extends Bare
 
@@ -29,14 +25,14 @@ final case class ReqPqMulti(nonce: Int128) extends Boxed
 final case class ResPq(
   nonce: Int128,
   serverNonce: Int128,
-  pq: String,
+  pq: MtString,
   serverPublicKeyFingerPrints: List[Long]
 ) extends Boxed
 
 final case class PQInnerDataDc(
-  pq: String,
-  p: String,
-  q: String,
+  pq: MtString,
+  p: MtString,
+  q: MtString,
   nonce: Int128,
   serverNonce: Int128,
   newNonce: Int256
@@ -45,11 +41,11 @@ final case class PQInnerDataDc(
 final case class ReqDHParams(
   nonce: Int128,
   serverNonce: Int128,
-  p: String,
-  q: String,
+  p: MtString,
+  q: MtString,
   publicKeyFingerprint: Long,
-  encryptedData: String
-)
+  encryptedData: MtString
+) extends Boxed
 
 sealed trait ServerDHParams
 final case class ServerDHParamsFail(
@@ -60,7 +56,7 @@ final case class ServerDHParamsFail(
 final case class ServerDHParamsOk(
   nonce: Int128,
   serverNonce: Int128,
-  encryptedAnswer: String
+  encryptedAnswer: MtString
 ) extends ServerDHParams with Boxed
 
 object Boxed {

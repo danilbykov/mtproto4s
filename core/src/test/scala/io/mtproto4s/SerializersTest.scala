@@ -55,11 +55,11 @@ class SchemaTest extends DefaultSpec with Checkers {
     }
 
     "encode & decode strings" in {
-      val encoder = MTEncoder[String]
-      val decoder = MTDecoder[String]
+      val encoder = MTEncoder[MtString]
+      val decoder = MTDecoder[MtString]
       check(forAll { str: String =>
-        val result = decoder.decode(encoder.encode(str).toVector)
-        result.asInstanceOf[Success[String]].result == str
+        val result = decoder.decode(encoder.encode(MtString(str.getBytes)).toVector)
+        result.asInstanceOf[Success[MtString]].result.bytes.toList == str.getBytes.toList
       })
     }
 

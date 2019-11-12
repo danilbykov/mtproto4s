@@ -6,6 +6,8 @@ import shapeless.Generic
 import shapeless.Lazy
 import shapeless.labelled.FieldType
 
+import io.mtproto4s.tags._
+
 trait MTEncoder[-T] {
   def encode(t: T): Chain[Byte]
 }
@@ -16,12 +18,14 @@ object MTEncoder {
 }
 
 object MTEncoders {
-  /*
+  implicit class MTEncoderOps[A](val a: A) extends AnyVal {
+    def encode(implicit encoder: MTEncoder[A]): Chain[Byte] = encoder.encode(a)
+  }
+
   implicit val bigEndianIntEncoder: MTEncoder[BigEndianInt] =
     (i: BigEndianInt) => Chain.fromSeq(
       (i >> 24).toByte :: (i >> 16).toByte :: (i >> 8).toByte :: i.toByte :: Nil
     )
-  */
 
   implicit val littleEndianIntEncoder: MTEncoder[Int] =
     (i: Int) => Chain.fromSeq(
@@ -35,14 +39,12 @@ object MTEncoders {
       Nil
     )
 
-  /*
   implicit val bigEndianLongEncoder: MTEncoder[BigEndianLong] =
     (l: BigEndianLong) => Chain.fromSeq(
       (l >> 56).toByte :: (l >> 48).toByte :: (l >> 40).toByte :: (l >> 32).toByte ::
       (l >> 24).toByte :: (l >> 16).toByte :: (l >> 8).toByte :: l.toByte ::
       Nil
     )
-  */
 
   private val upToThreeZeroes: Map[Int, Chain[Byte]] =
     Map(
@@ -50,15 +52,15 @@ object MTEncoders {
       2 -> Chain.fromSeq(List(0, 0)),
       3 -> Chain.fromSeq(List(0, 0, 0))
     )
-  implicit val stringEncoder: MTEncoder[String] =
-    (s: String) => {
-      val bytes = s.getBytes("UTF-8")
+  implicit val stringEncoder: MTEncoder[MtString] =
+    (s: MtString) => {
+      val bytes = s.bytes
       val bytesSize = bytes.size
       if (bytesSize <= 253) {
         val paddingSize = 4 - (bytesSize + 1) % 4
         val chain = Chain.concat(Chain.one(bytesSize.toByte), Chain(bytes: _*))
         Chain.concat(chain, upToThreeZeroes.getOrElse(paddingSize, Chain.nil))
-      } else if (bytesSize < (2 << 24))  {
+      } else if (bytesSize < (2 << 24)) {
         val head = Chain(254.toByte, bytesSize.toByte, (bytesSize >> 8).toByte, (bytesSize >> 16).toByte)
         val chain = Chain.concat(head, Chain(bytes: _*))
         val paddingSize = 4 - bytesSize % 4
