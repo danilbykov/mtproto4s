@@ -5,6 +5,7 @@ import shapeless.{::, HList, HNil}
 import shapeless.Generic
 import shapeless.Lazy
 import shapeless.labelled.FieldType
+import shapeless.tag.@@
 
 import io.mtproto4s.tags._
 
@@ -24,7 +25,7 @@ object MTEncoders {
 
   implicit val bigEndianIntEncoder: MTEncoder[BigEndianInt] =
     (i: BigEndianInt) => Chain.fromSeq(
-      (i >> 24).toByte :: (i >> 16).toByte :: (i >> 8).toByte :: i.toByte :: Nil
+      (i.underlying >> 24).toByte :: (i.underlying >> 16).toByte :: (i.underlying >> 8).toByte :: i.underlying.toByte :: Nil
     )
 
   implicit val littleEndianIntEncoder: MTEncoder[Int] =
@@ -41,8 +42,8 @@ object MTEncoders {
 
   implicit val bigEndianLongEncoder: MTEncoder[BigEndianLong] =
     (l: BigEndianLong) => Chain.fromSeq(
-      (l >> 56).toByte :: (l >> 48).toByte :: (l >> 40).toByte :: (l >> 32).toByte ::
-      (l >> 24).toByte :: (l >> 16).toByte :: (l >> 8).toByte :: l.toByte ::
+      (l.underlying >> 56).toByte :: (l.underlying >> 48).toByte :: (l.underlying >> 40).toByte :: (l.underlying >> 32).toByte ::
+      (l.underlying >> 24).toByte :: (l.underlying >> 16).toByte :: (l.underlying >> 8).toByte :: l.underlying.toByte ::
       Nil
     )
 

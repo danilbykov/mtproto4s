@@ -58,4 +58,12 @@ object CryptoUtils {
     cipher.init(Cipher.ENCRYPT_MODE, publicKey)
     return Chain(cipher.doFinal(bytes.toList.toArray): _*)
   }
+
+  def decryptAes(initialVector: Chain[Byte], aesKey: Chain[Byte], bytes: Chain[Byte]): Chain[Byte] = {
+    val cipher = Cipher.getInstance("AES/CBC/PKCS5PADDING")
+    val ivSpec = new javax.crypto.spec.IvParameterSpec(initialVector.iterator.toArray)
+    val keySpec = new javax.crypto.spec.SecretKeySpec(aesKey.iterator.toArray, "AES")
+    cipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec)
+    Chain(cipher.doFinal(bytes.iterator.toArray): _*)
+  }
 }

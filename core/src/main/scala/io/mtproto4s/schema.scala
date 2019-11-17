@@ -6,11 +6,14 @@ import shapeless.tag.@@
 trait Bare extends Any
 trait Boxed extends Any
 
+final case class BigEndianInt(val underlying: Int) extends AnyVal
+final case class BigEndianLong(val underlying: Long) extends AnyVal
+
 object tags {
   sealed trait BigEndianTag// extends Hashable
 
-  type BigEndianInt = Int @@ BigEndianTag
-  type BigEndianLong = Long @@ BigEndianTag
+  //type BigEndianInt = Int @@ BigEndianTag
+  //type BigEndianLong = Long @@ BigEndianTag
 }
 
 final case class MtString(bytes: Array[Byte]) {
@@ -64,7 +67,7 @@ object Boxed {
 
   implicit val reqPqMultiHash = field[ReqPqMulti](0xbe7e8ef1)
   implicit val resPqHash = field[ResPq](0x05162463)
-  implicit val pqInnerDataDc = field[PQInnerDataDc](0xa9f55f95)
+  implicit val pqInnerDataDc = field[PQInnerDataDc](0x83c95aec)//ec5ac983)//a9f55f95)
   implicit val reqDHParams = field[ReqDHParams](0xd712e4be)
   implicit val serverDhParamsFail = field[ServerDHParamsFail](0x79cb045d)
   implicit val serverDhParamsOk = field[ServerDHParamsOk](0xd0e8075c)

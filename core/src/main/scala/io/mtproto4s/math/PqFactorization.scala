@@ -28,7 +28,10 @@ object PqFactorization {
         if ((j & (j - 1)) == 0) y = x
         gcd(z, pq)
       } dropWhile (_ == 1)
-    } find (_ > 1) map (q => (pq / q, q))
+    } find (_ > 1) map { q =>
+      val p = pq / q
+      (p min q, p max q)
+    }
 
   def gcd(arg1: Long, arg2: Long): Long = {
     var a = arg1

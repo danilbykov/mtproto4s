@@ -1,7 +1,6 @@
 package io.mtproto4s
 
 import cats.data.NonEmptyList
-import cats.data.NonEmptyChain
 import shapeless.{::, HList, HNil}
 import shapeless.LabelledGeneric
 import shapeless.Lazy
@@ -120,7 +119,7 @@ object MTDecoders {
           ((bytes(1).toInt & 0xff) << 16) |
           ((bytes(2).toInt & 0xff) << 8) |
            (bytes(3).toInt & 0xff)
-        Success(tag[BigEndianTag][Int](result), 4)
+        Success(BigEndianInt(result), 4)
       }
     }
 
@@ -152,7 +151,7 @@ object MTDecoders {
           ((bytes(5).toLong & 0xff) << 16) |
           ((bytes(6).toLong & 0xff) << 8) |
            (bytes(7).toLong & 0xff)
-        Success(tag[BigEndianTag][Long](result), 8)
+        Success(BigEndianLong(result), 8)
       }
     }
 
@@ -212,7 +211,7 @@ object MTDecoders {
   implicit def vectorDecoder[X : MTDecoder]: MTDecoder[List[X]] =
     MTDecoder[Int].filter(
       _ == 0x1cb5c415,
-      currentHash => Failure(NonEmptyList.one(ParserError(s"Unexpected hash $currentHash for list")))
+      currentHash => Failure(NonEmptyList.one(ParserError(s"Unexpected hash ${currentHash.toHexString} for list")))
     ) *> MTDecoder[Int].flatMap(n => MTDecoder[X].repeat(n))
 
   implicit val hnilDecoder: MTDecoder[HNil] =
@@ -254,7 +253,7 @@ object MTDecoders {
   ): MTDecoder[X] =
     MTDecoder[Int].filter(
       _ == hash,
-      currentHash => Failure(NonEmptyList.one(ParserError(s"Unexpected hash $currentHash. Expected $hash.")))
+      currentHash => Failure(NonEmptyList.one(ParserError(s"Unexpected hash ${currentHash.toHexString}. Expected ${hash.toHexString}.")))
     ) *> ((bytes: Vector[Byte]) => {
       decoder.value.decode(bytes).map(gen.from).mapError(ParserError(s"Can not decode class ${typeTag.tpe.typeSymbol.name}") :: _)
     })

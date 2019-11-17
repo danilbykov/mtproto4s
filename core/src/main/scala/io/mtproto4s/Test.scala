@@ -10,12 +10,13 @@ import shapeless.tag
 import Boxed._
 import java.io.InputStream
 import io.mtproto4s.tags._
-import io.mtproto4s.math.CryptoUtils
+import io.mtproto4s.math.CryptoUtils._
 import io.mtproto4s.math.PqFactorization
 
 object Test extends App {
   import MTEncoders._
   import MTDecoders._
+  import dump._
 
   def send[R: MTEncoder](os: OutputStream, request: R, prepend: Chain[Byte]): Unit = {
     val time = ((System.currentTimeMillis % 1000) << 20) + ((System.currentTimeMillis / 1000) << 32)
@@ -26,7 +27,6 @@ object Test extends App {
       if (bytes.length < 127 * 4) {
         (bytes.length / 4).toByte +: bytes
       } else {
-        println((bytes.length / 4).encode.map(b => (b & 0xff).toHexString).toList.mkString(" "))
         (bytes.length / 4).encode.initLast
            .getOrElse(throw new Exception("Impossible"))
            ._1
@@ -34,9 +34,25 @@ object Test extends App {
            .++(bytes)
       }
     os.write(Chain.concat(prepend, payloadWithLength).iterator.toArray)
-    println(Chain.concat(prepend, payloadWithLength).map(b => (b & 0xff).toHexString).toList.mkString(" "))
+    println(Chain.concat(prepend, payloadWithLength).dump(s"Request ${request.getClass.getName()}:"))
     os.flush()
   }
+
+  def totalLength(buffer: Array[Byte], offset: Int): Option[(Int, Int)] =
+    if (offset > 0) {
+      if (buffer.head != 127) {
+        Some((1, buffer.head.toInt << 2))
+      } else if (offset > 4) {
+        (buffer.take(4).drop(1).toVector :+ 0.toByte).as[Int] match {
+          case Success(result, _) => Some((4, result << 2))
+          case Failure(_) => None
+        }
+      } else {
+        None
+      }
+    } else {
+      None
+    }
 
   val messageDecoder = MTDecoder[Long] ~ MTDecoder[Long] ~ MTDecoder[Int]
   def read[R: MTDecoder](is: InputStream): R = {
@@ -45,11 +61,12 @@ object Test extends App {
     do {
       val readBytes = is.read(buffer, offset, buffer.size - offset)
       offset += readBytes
-    } while ((offset == 0) || (offset > 0 && (buffer.head.toInt << 2 == offset + 1)))
-    println(buffer(0))
-    val messageBytes = buffer.take(offset).drop(1)
-    println(messageBytes.map(b => (b & 0xff).toHexString).toList.mkString(" "))
-    println(messageBytes.size)
+    } while ((offset == 0) || totalLength(buffer, offset).exists { case (prefix, length) => length == prefix + offset })
+    val messageBytes = totalLength(buffer, offset) match {
+      case Some((prefix, _)) => buffer.take(offset).drop(prefix)
+      case None => throw new Exception("Impossible!")
+    }
+    println(Chain(messageBytes: _*).dump(s"Response:"))
     messageBytes.toVector.as(messageDecoder ~ MTDecoder[R]).map(_._2) match {
       case Success(result, _) =>
         result
@@ -70,26 +87,28 @@ object Test extends App {
   val resPq = read[ResPq](is)
 
   val pq = resPq.pq.bytes.toVector.as[BigEndianLong] match {
-    case Success(res, _) => res
+    case Success(res, _) => res.underlying
     case Failure(es) => throw new Exception(es.toList.mkString("\n"))
   }
   val Some((pnum, qnum)) = PqFactorization.factorize(pq)
 
-  val p = MtString(tag[BigEndianTag](pnum.toInt).encode.toList.toArray)
-  val q = MtString(tag[BigEndianTag](qnum.toInt).encode.toList.toArray)
+  val p = MtString(BigEndianInt(pnum.toInt).encode.toList.toArray)
+  val q = MtString(BigEndianInt(qnum.toInt).encode.toList.toArray)
 
   val newNonce = Int256(Random.nextLong(), Random.nextLong(), Random.nextLong(), Random.nextLong())
   val innerData = PQInnerDataDc(resPq.pq, p, q, nonce, resPq.serverNonce, newNonce)
 
   val encodedInnerDataDc = innerData.encode
-  val sha1Hash = CryptoUtils.sha1(encodedInnerDataDc)
+  // println("encodes-data-dc", encodedInnerDataDc.map(b => (b & 0xff).toHexString).toList.mkString(" "))
+  val sha1Hash = sha1(encodedInnerDataDc)
   val hashAndInnerData = Chain.concat(sha1Hash, encodedInnerDataDc)
   val randomTail = Chain.fromSeq(Random.alphanumeric.take(255 - hashAndInnerData.length.toInt).map(_.toByte))
 
-  val rsaKey = resPq.serverPublicKeyFingerPrints.collectFirst(CryptoUtils.fingerprintToCert)
+  val rsaKey = resPq.serverPublicKeyFingerPrints.collectFirst(fingerprintToCert)
     .getOrElse(throw new Exception("No cert"))
-  val encryptedData = CryptoUtils.rsa(rsaKey, Chain.concat(hashAndInnerData, randomTail))
-  println("len", encryptedData.length)
+  val encryptedData = rsa(rsaKey, Chain.concat(hashAndInnerData, randomTail))
+  // println("len", encryptedData.length)
+  // println("encrypted-data", encryptedData.map(b => (b & 0xff).toHexString).toList.mkString(" "))
 
   val dhParams = ReqDHParams(nonce, resPq.serverNonce, p, q, rsaKey.fingerprint,
     MtString(encryptedData.toList.toArray))
@@ -97,4 +116,18 @@ object Test extends App {
 
   val serverDhParams = read[ServerDHParamsOk](is)
   println(serverDhParams)
+
+  val newNonceEnc = newNonce.encode
+  val serverNonceEnc = resPq.serverNonce.encode
+  val aesKey = Chain.concat(
+    sha1(Chain.concat(newNonceEnc, serverNonceEnc)),
+    Chain(sha1(Chain.concat(serverNonceEnc, newNonceEnc)).iterator.take(12).toList: _*)
+  )
+  val aesIv = Chain.concat(
+    Chain(sha1(Chain.concat(serverNonceEnc, newNonceEnc)).iterator.drop(12).take(8).toList: _*),
+    sha1(Chain.concat(newNonceEnc, newNonceEnc))
+  )
+  println(aesIv.size)
+
+  decryptAes(aesIv, aesKey, Chain(serverDhParams.encryptedAnswer.bytes: _*)).dump("aes")
 }
