@@ -125,8 +125,17 @@ object Test extends App {
   )
   val aesIv = Chain.concat(
     Chain(sha1(Chain.concat(serverNonceEnc, newNonceEnc)).iterator.drop(12).take(8).toList: _*),
-    sha1(Chain.concat(newNonceEnc, newNonceEnc))
+    Chain.concat(
+      sha1(Chain.concat(newNonceEnc, newNonceEnc)),
+      Chain(newNonceEnc.iterator.take(4).toList: _*)
+    )
   )
+
+  println(aesKey.dump("aes-key"))
+  println(aesIv.dump("aes-iv"))
+
+  // tmp_aes_key := SHA1(new_nonce + server_nonce) + substr (SHA1(server_nonce + new_nonce), 0, 12);
+  // tmp_aes_iv := substr (SHA1(server_nonce + new_nonce), 12, 8) + SHA1(new_nonce + new_nonce) + substr (new_nonce, 0, 4);
   println(aesIv.size)
 
   decryptAes(aesIv, aesKey, Chain(serverDhParams.encryptedAnswer.bytes: _*)).dump("aes")

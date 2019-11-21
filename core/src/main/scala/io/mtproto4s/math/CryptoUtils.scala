@@ -6,6 +6,7 @@ import java.security.KeyFactory
 import java.security.MessageDigest
 import java.security.spec.X509EncodedKeySpec
 import javax.crypto.Cipher
+import javax.crypto.spec.SecretKeySpec
 
 import cats.data.Chain
 import io.mtproto4s.Failure
@@ -62,8 +63,32 @@ object CryptoUtils {
   def decryptAes(initialVector: Chain[Byte], aesKey: Chain[Byte], bytes: Chain[Byte]): Chain[Byte] = {
     val cipher = Cipher.getInstance("AES/CBC/PKCS5PADDING")
     val ivSpec = new javax.crypto.spec.IvParameterSpec(initialVector.iterator.toArray)
-    val keySpec = new javax.crypto.spec.SecretKeySpec(aesKey.iterator.toArray, "AES")
+    val keySpec = new SecretKeySpec(aesKey.iterator.toArray, "AES_256")
     cipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec)
     Chain(cipher.doFinal(bytes.iterator.toArray): _*)
+  }
+
+  def decryptAesIge(initialVector: Chain[Byte], aesKey: Chain[Byte], bytes: Chain[Byte]): Chain[Byte] = {
+    val cipher = Cipher.getInstance("AES/ECB/NoPadding")
+    cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(aesKey.iterator.toArray, "AES"))
+
+    val blocksize = cipher.getBlockSize()
+    val (xPrev, yPrev) = initialVector.toList.toArray.splitAt(blocksize)
+    bytes.iterator.grouped(blocksize)
+      .foldLeft((xPrev, yPrev, Chain.empty[Byte])) { case ((xPrev, yPrev, result), block) =>
+        val blockArray = block.toArray
+        val y = xor(cipher.doFinal(xor(blockArray, yPrev)), xPrev)
+        (blockArray, y, Chain.concat(result, Chain(y: _*)))
+      }
+      ._3
+  }
+
+  private def xor(left: Array[Byte], right: Array[Byte]): Array[Byte] = {
+    val length = left.size max right.size
+    val result = new Array[Byte](length)
+    0 until length foreach { i =>
+      result(i) = (left(i) ^ right(i)).toByte
+    }
+    result
   }
 }
