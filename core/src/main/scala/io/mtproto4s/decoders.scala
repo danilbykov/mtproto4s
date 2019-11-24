@@ -1,14 +1,11 @@
 package io.mtproto4s
 
 import cats.data.NonEmptyList
-import shapeless.{::, HList, HNil}
+import shapeless.{::, :+:, Coproduct, CNil, Inl, Inr, HList, HNil}
 import shapeless.LabelledGeneric
 import shapeless.Lazy
 import shapeless.Witness
 import shapeless.labelled.{FieldType, field}
-import shapeless.tag
-
-import io.mtproto4s.tags._
 
 case class ParserError(str: String)
 
@@ -66,7 +63,15 @@ trait MTDecoder[A] {
   def ~[B](other: MTDecoder[B]): MTDecoder[(A, B)] =
     this.flatMap(a => other.map(b => (a, b)))
 
-  def filter(func: A => Boolean, fallback: A => Failure): MTDecoder[A] =
+  def |[B](other: MTDecoder[B]): MTDecoder[Either[A, B]] =
+    (bytes: Vector[Byte]) => {
+      self.decode(bytes) match {
+        case Success(result, bytesConsumed) => Success(Left(result), bytesConsumed)
+        case Failure(_) => other.decode(bytes).map(Right(_))
+      }
+    }
+
+  def filter[B >: A](func: A => Boolean, fallback: A => DecodedResult[B]): MTDecoder[B] =
     (bytes: Vector[Byte]) => {
       self.decode(bytes) match {
         case s @ Success(result, _) if func(result) => s
@@ -101,10 +106,9 @@ object MTDecoder {
     (_: Vector[Byte]) => Success(a, 0)
 }
 
-object MTDecoders {
+object MTDecoders extends LowPriorityDecodersImplicits {
 
   implicit class ByteChainOps(val bytes: Vector[Byte]) extends AnyVal {
-
     def as[A: MTDecoder]: DecodedResult[A] =
       MTDecoder[A].decode(bytes)
   }
@@ -242,7 +246,9 @@ object MTDecoders {
     typeTag: TypeTag[X]
   ): MTDecoder[X] =
     (bytes: Vector[Byte]) => {
-      decoder.value.decode(bytes).map(gen.from).mapError(ParserError(s"Can not decode class ${typeTag.tpe.typeSymbol.name}") :: _)
+      decoder.value.decode(bytes)
+        .map(gen.from)
+        .mapError(ParserError(s"Can not decode class ${typeTag.tpe.typeSymbol.name}") :: _)
     }
 
   implicit def hashableGenericDecoder[X <: Boxed, Y <: HList](implicit
@@ -255,6 +261,38 @@ object MTDecoders {
       _ == hash,
       currentHash => Failure(NonEmptyList.one(ParserError(s"Unexpected hash ${currentHash.toHexString}. Expected ${hash.toHexString}.")))
     ) *> ((bytes: Vector[Byte]) => {
-      decoder.value.decode(bytes).map(gen.from).mapError(ParserError(s"Can not decode class ${typeTag.tpe.typeSymbol.name}") :: _)
+      decoder.value.decode(bytes)
+        .map(gen.from)
+        .mapError(ParserError(s"Can not decode class ${typeTag.tpe.typeSymbol.name}") :: _)
     })
+
+    /*
+  implicit val cnilDecoder: MTDecoder[CNil] =
+    _ => Failure(ParserError("asdfasdf"))
+
+  implicit def coproductDecoder[H, T <: Coproduct](implicit
+    hEncoder: MTDecoder[H],
+    tEncoder: MTDecoder[T],
+  ): MTDecoder[H :+: T] =
+    (hEncoder | tEncoder) map {
+      case Right(v) => Inr(v)
+      case Left(v) => Inl(v)
+    }
+    */
+}
+
+trait LowPriorityDecodersImplicits {
+  import scala.reflect.runtime.universe._
+  /*
+  implicit def abstractGenericDecoder[X <: Abstract, Y <: Coproduct](implicit
+    gen: LabelledGeneric.Aux[X, Y],
+    decoder: Lazy[MTDecoder[Y]],
+    typeTag: TypeTag[X]
+  ): MTDecoder[X] =
+    (bytes: Vector[Byte]) => {
+      decoder.value.decode(bytes)
+        .map(gen.from)
+        .mapError(ParserError(s"Can not decode trait ${typeTag.tpe.typeSymbol.name}") :: _)
+    }
+  */
 }

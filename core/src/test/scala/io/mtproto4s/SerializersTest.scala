@@ -4,15 +4,26 @@ import org.scalacheck.Arbitrary._
 import org.scalacheck.Prop.{forAll, propBoolean}
 import org.scalacheck.ScalacheckShapeless._
 import org.scalatest.prop.Checkers
+import shapeless.labelled.field
 
-class SchemaTest extends DefaultSpec with Checkers {
+class SerializersTest extends DefaultSpec with Checkers {
 
   import MTEncoders._
   import MTDecoders._
 
+  sealed trait SealedTrait extends Abstract
+  final case class AImpl(i: Int) extends/* SealedTrait with*/ Boxed
+  final case class BImpl(l: Long) extends SealedTrait with Boxed
+  final case class CImpl(i1: Int, i2: Int) extends SealedTrait with Boxed
+
+  implicit val aImplField = field[BImpl](0x11111111)
+  implicit val bImplField = field[BImpl](0x22222222)
+  implicit val cImplField = field[CImpl](0x33333333)
+
   implicit override val generatorDrivenConfig = PropertyCheckConfiguration(minSuccessful = 500)
 
   "Encoders & Decoders" must {
+
     "encode int128" in {
       val result = MTEncoder[Int128].encode(Int128(123123L, 9876543210L)).toList
       result shouldBe List(0xf3, 0xe0, 0x01, 0, 0, 0, 0, 0, 0xea, 0x16, 0xb0, 0x4c, 0x02, 0, 0, 0).map(_.toByte)
@@ -94,6 +105,38 @@ class SchemaTest extends DefaultSpec with Checkers {
         val result = decoder.decode(bytes)
         result == Success(reqs, bytes.size)
       })
+    }
+
+    "encode sealed traits" in {
+      /*
+      check(forAll { int: Int =>
+        val aImpl: SealedTrait = AImpl(int)
+        aImpl.encode.toVector.as[AImpl] match {
+          case Success(x, _) if x == aImpl => true
+          case _ => false
+        }
+      })
+      check(forAll { long: Long =>
+        val bImpl: SealedTrait = BImpl(long)
+        bImpl.encode.toVector.as[BImpl] match {
+          case Success(x, _) if x == bImpl => true
+          case _ => false
+        }
+      })
+      check(forAll { (i1: Int, i2: Int) =>
+        val cImpl: SealedTrait = CImpl(i1, i2)
+        cImpl.encode.toVector.as[CImpl] match {
+          case Success(x, _) if x == cImpl => true
+          case _ => false
+        }
+      })
+      */
+    }
+
+    "encode/decode sealed traits" in {
+      MTDecoder[AImpl]
+
+
     }
   }
 }

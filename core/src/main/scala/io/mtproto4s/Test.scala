@@ -1,15 +1,14 @@
 package io.mtproto4s
 
-import java.net._
 import java.io.OutputStream
+import java.net._
+import java.math.BigInteger
 
 import cats.data.Chain
 import scala.util.Random
-import shapeless.tag
 
 import Boxed._
 import java.io.InputStream
-import io.mtproto4s.tags._
 import io.mtproto4s.math.CryptoUtils._
 import io.mtproto4s.math.PqFactorization
 
@@ -131,12 +130,44 @@ object Test extends App {
     )
   )
 
-  println(aesKey.dump("aes-key"))
-  println(aesIv.dump("aes-iv"))
+  val serverDhInnerData = decryptAesIge(aesIv, aesKey, Chain(serverDhParams.encryptedAnswer.bytes: _*))
+    .toVector
+    .drop(20)
+    .as[ServerDHInnerData] match {
+      case Success(result, _) =>
+        result
+      case Failure(es) =>
+        throw new Exception(es.toList.mkString("\n"))
+    }
 
-  // tmp_aes_key := SHA1(new_nonce + server_nonce) + substr (SHA1(server_nonce + new_nonce), 0, 12);
-  // tmp_aes_iv := substr (SHA1(server_nonce + new_nonce), 12, 8) + SHA1(new_nonce + new_nonce) + substr (new_nonce, 0, 4);
-  println(aesIv.size)
+  println(serverDhInnerData)
 
-  decryptAes(aesIv, aesKey, Chain(serverDhParams.encryptedAnswer.bytes: _*)).dump("aes")
+  val b = new BigInteger(1, generateSeed(256).toList.toArray)
+  val g = new BigInteger(serverDhInnerData.g.toString)
+  val dhPrime = new BigInteger(1, serverDhInnerData.dhPrime.bytes)
+  val gb = g.modPow(b, dhPrime)
+  val authKeyVal = new BigInteger(1, serverDhInnerData.gA.bytes).modPow(b, dhPrime)
+
+  val authKey = Chain(alignKeyZero(authKeyVal.toByteArray.dropWhile(_ == 0), 256): _*)
+  val authAuxHash = sha1(authKey).toList.take(8)
+
+  val encodedInnerData = ClientDHInnerData(nonce, resPq.serverNonce, 0, MtString(gb.toByteArray)).encode
+  val encodedInnerDataWithHash = padBytes(Chain.concat(sha1(encodedInnerData), encodedInnerData), 16)
+  val encryptedInnerDataWithHash = encryptAesIge(aesIv, aesKey, encodedInnerDataWithHash)
+
+  val setClientDhParams = SetClientDhParams(nonce, resPq.serverNonce, MtString(encryptedInnerDataWithHash.toList.toArray))
+  send(os, setClientDhParams, Chain.nil)
+
+  val response = read[DhGenOk](is)
+  println(response)
+
+
+  def alignKeyZero(bytes: Array[Byte], size: Int): Array[Byte] =
+    if (bytes.size == size) {
+      bytes
+    } else if (bytes.size > size) {
+      bytes.takeRight(size)
+    } else {
+      Array.fill[Byte](size - bytes.size)(0) ++ bytes
+    }
 }

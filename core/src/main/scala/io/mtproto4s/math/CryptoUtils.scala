@@ -16,6 +16,7 @@ import io.mtproto4s.MTEncoders._
 import io.mtproto4s.MtString
 import io.mtproto4s.Success
 import java.security.spec.RSAPublicKeySpec
+import scala.util.Random
 
 case class RsaKey(
   modulus: BigInteger,
@@ -83,6 +84,32 @@ object CryptoUtils {
       ._3
   }
 
+  def encryptAesIge(initialVector: Chain[Byte], aesKey: Chain[Byte], data: Chain[Byte]): Chain[Byte] = {
+    val cipher = Cipher.getInstance("AES/ECB/NoPadding")
+    cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(aesKey.iterator.toArray, "AES"))
+
+    val blocksize = cipher.getBlockSize()
+    val (xPrev, yPrev) = initialVector.toList.toArray.splitAt(blocksize)
+    padBytes(data, blocksize).iterator
+      .grouped(blocksize)
+      .foldLeft((xPrev, yPrev, Chain.empty[Byte])) { case ((xPrev, yPrev, result), block) =>
+        val blockArray = block.toArray
+        val x = xor(cipher.doFinal(xor(blockArray, xPrev)), yPrev)
+        (x, blockArray, Chain.concat(result, Chain(x: _*)))
+      }
+      ._3
+  }
+
+  def padBytes(bytes: Chain[Byte], length: Int): Chain[Byte] = {
+    val size = bytes.length
+    val remainder = size % length
+    if (remainder == 0) {
+      bytes
+    } else {
+      Chain.concat(bytes, Chain.fromSeq(List.fill(length - remainder.toInt)(0))) // FIXME: Generate random chain
+    }
+  }
+
   private def xor(left: Array[Byte], right: Array[Byte]): Array[Byte] = {
     val length = left.size max right.size
     val result = new Array[Byte](length)
@@ -90,5 +117,11 @@ object CryptoUtils {
       result(i) = (left(i) ^ right(i)).toByte
     }
     result
+  }
+
+  def generateSeed(size: Int): Chain[Byte] = {
+    val array = new Array[Byte](size)
+    Random.nextBytes(array)
+    Chain(array: _*)
   }
 }

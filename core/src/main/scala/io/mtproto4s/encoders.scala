@@ -1,13 +1,10 @@
 package io.mtproto4s
 
 import cats.data.Chain
-import shapeless.{::, HList, HNil}
+import shapeless.{::, :+:, Coproduct, CNil, Inl, Inr, HList, HNil}
 import shapeless.Generic
 import shapeless.Lazy
 import shapeless.labelled.FieldType
-import shapeless.tag.@@
-
-import io.mtproto4s.tags._
 
 trait MTEncoder[-T] {
   def encode(t: T): Chain[Byte]
@@ -18,7 +15,7 @@ object MTEncoder {
     implicitly[MTEncoder[T]]
 }
 
-object MTEncoders {
+object MTEncoders extends LowPriorityEncodersImplicits {
   implicit class MTEncoderOps[A](val a: A) extends AnyVal {
     def encode(implicit encoder: MTEncoder[A]): Chain[Byte] = encoder.encode(a)
   }
@@ -101,4 +98,23 @@ object MTEncoders {
     hash: FieldType[X, Int]
   ): MTEncoder[X] =
     (t: X) => Chain.concat(MTEncoder[Int].encode(hash), encoder.value.encode(gen.to(t)))
+
+  implicit val cnilEncoder: MTEncoder[CNil] =
+    _ => throw new Exception("!")
+
+  implicit def coproductEncoder[H, T <: Coproduct](implicit
+    hEncoder: MTEncoder[H],
+    tEncoder: MTEncoder[T]
+  ): MTEncoder[H :+: T] = {
+    case Inl(h) => hEncoder.encode(h)
+    case Inr(t) => tEncoder.encode(t)
+  }
+}
+
+trait LowPriorityEncodersImplicits {
+  implicit def abstractGenericEncoder[X <: Abstract, Y](implicit
+    gen: Generic.Aux[X, Y],
+    encoder: Lazy[MTEncoder[Y]]
+  ): MTEncoder[X] =
+    (t: X) => encoder.value.encode(gen.to(t))
 }
