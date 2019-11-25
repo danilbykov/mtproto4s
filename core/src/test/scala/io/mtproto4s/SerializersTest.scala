@@ -6,19 +6,15 @@ import org.scalacheck.ScalacheckShapeless._
 import org.scalatest.prop.Checkers
 import shapeless.labelled.field
 
+sealed trait SealedTrait extends Abstract
+final case class AImpl(i: Int) extends SealedTrait with Boxed
+final case class BImpl(l: Long) extends SealedTrait with Boxed
+final case class CImpl(i1: Int, i2: Int) extends SealedTrait with Boxed
+
 class SerializersTest extends DefaultSpec with Checkers {
 
   import MTEncoders._
   import MTDecoders._
-
-  sealed trait SealedTrait extends Abstract
-  final case class AImpl(i: Int) extends/* SealedTrait with*/ Boxed
-  final case class BImpl(l: Long) extends SealedTrait with Boxed
-  final case class CImpl(i1: Int, i2: Int) extends SealedTrait with Boxed
-
-  implicit val aImplField = field[BImpl](0x11111111)
-  implicit val bImplField = field[BImpl](0x22222222)
-  implicit val cImplField = field[CImpl](0x33333333)
 
   implicit override val generatorDrivenConfig = PropertyCheckConfiguration(minSuccessful = 500)
 
@@ -107,8 +103,11 @@ class SerializersTest extends DefaultSpec with Checkers {
       })
     }
 
+    implicit val aImplField = field[AImpl](0x11111111)
+    implicit val bImplField = field[BImpl](0x22222222)
+    implicit val cImplField = field[CImpl](0x33333333)
+
     "encode sealed traits" in {
-      /*
       check(forAll { int: Int =>
         val aImpl: SealedTrait = AImpl(int)
         aImpl.encode.toVector.as[AImpl] match {
@@ -130,13 +129,29 @@ class SerializersTest extends DefaultSpec with Checkers {
           case _ => false
         }
       })
-      */
     }
 
     "encode/decode sealed traits" in {
-      MTDecoder[AImpl]
+      check(forAll { int: Int =>
+        AImpl(int).encode.toVector.as[SealedTrait] match {
+          case Success(x, _) => x == AImpl(int)
+          case _ => false
+        }
+      })
 
+      check(forAll { long: Long =>
+        BImpl(long).encode.toVector.as[SealedTrait] match {
+          case Success(x, _) => x == BImpl(long)
+          case _ => false
+        }
+      })
 
+      check(forAll { (i1: Int, i2: Int) =>
+        CImpl(i1, i2).encode.toVector.as[SealedTrait] match {
+          case Success(x, _) => x == CImpl(i1, i2)
+          case _ => false
+        }
+      })
     }
   }
 }

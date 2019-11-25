@@ -113,7 +113,10 @@ object Test extends App {
     MtString(encryptedData.toList.toArray))
   send(os, dhParams, Chain.nil)
 
-  val serverDhParams = read[ServerDHParamsOk](is)
+  val serverDhParams = read[ServerDHParams](is) match {
+    case params: ServerDHParamsOk => params
+    case unexpected => throw new Exception(s"Unexpected $unexpected")
+  }
   println(serverDhParams)
 
   val newNonceEnc = newNonce.encode

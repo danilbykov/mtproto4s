@@ -2,6 +2,7 @@ package io.mtproto4s
 
 import cats.data.NonEmptyList
 import shapeless.{::, :+:, Coproduct, CNil, Inl, Inr, HList, HNil}
+import shapeless.Generic
 import shapeless.LabelledGeneric
 import shapeless.Lazy
 import shapeless.Witness
@@ -266,7 +267,6 @@ object MTDecoders extends LowPriorityDecodersImplicits {
         .mapError(ParserError(s"Can not decode class ${typeTag.tpe.typeSymbol.name}") :: _)
     })
 
-    /*
   implicit val cnilDecoder: MTDecoder[CNil] =
     _ => Failure(ParserError("asdfasdf"))
 
@@ -278,14 +278,12 @@ object MTDecoders extends LowPriorityDecodersImplicits {
       case Right(v) => Inr(v)
       case Left(v) => Inl(v)
     }
-    */
 }
 
 trait LowPriorityDecodersImplicits {
   import scala.reflect.runtime.universe._
-  /*
   implicit def abstractGenericDecoder[X <: Abstract, Y <: Coproduct](implicit
-    gen: LabelledGeneric.Aux[X, Y],
+    gen: Generic.Aux[X, Y],
     decoder: Lazy[MTDecoder[Y]],
     typeTag: TypeTag[X]
   ): MTDecoder[X] =
@@ -294,5 +292,4 @@ trait LowPriorityDecodersImplicits {
         .map(gen.from)
         .mapError(ParserError(s"Can not decode trait ${typeTag.tpe.typeSymbol.name}") :: _)
     }
-  */
 }

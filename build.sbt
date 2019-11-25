@@ -1,9 +1,10 @@
 val commonSettings = Seq(
   organization := "io.twitchapi4s",
   scalaVersion := "2.12.10",
-  scalacOptions ++= Seq(
+  scalacOptions ++= List(
     "-deprecation",
     "-feature",
+    "-unchecked",
     "-Ypartial-unification",
     "-Ywarn-unused:implicits",
     "-Ywarn-unused:imports",
@@ -20,7 +21,7 @@ lazy val root = (project in file("core"))
   .settings(
     name := "mtproto4s-core",
     version := "0.0.1",
-    libraryDependencies ++= Seq(
+    libraryDependencies ++= List(
       "org.typelevel" %% "cats-core" % "2.0.0",
       "com.chuusai" %% "shapeless" % "2.3.3",
       "org.scalatest" %% "scalatest" % "3.0.5" % "test",
